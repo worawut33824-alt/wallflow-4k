@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.text.format.DateFormat
 import android.service.wallpaper.WallpaperService
 import android.util.Log
 import android.view.MotionEvent
@@ -26,7 +27,11 @@ import com.admrichest.wallflow.data.LibraryRepository
 import com.admrichest.wallflow.data.MediaItem
 import com.admrichest.wallflow.data.Quality
 import com.admrichest.wallflow.data.RotationMode
+import com.admrichest.wallflow.data.CalendarRepository
+import com.admrichest.wallflow.data.WeatherRepository
 import com.admrichest.wallflow.data.Settings
+import java.util.Calendar
+import java.util.Date
 import java.util.concurrent.Executors
 
 private const val TAG = "WallFlowEngine"
@@ -78,6 +83,17 @@ class WallFlowWallpaperService : WallpaperService() {
             override fun onReceive(context: Context, intent: Intent) = render(force = true)
         }
 
+        private var overlayRenderer: OverlayRenderer? = null
+        private var overlayBitmap: Bitmap? = null
+
+        /** Redraws the clock layer on each minute boundary while visible. */
+        private val overlayTick = object : Runnable {
+            override fun run() {
+                refreshOverlay()
+                main.postDelayed(this, millisToNextMinute())
+            }
+        }
+
         private val kenBurnsTick = object : Runnable {
             override fun run() {
                 if (!visible || still == null) return
@@ -102,6 +118,7 @@ class WallFlowWallpaperService : WallpaperService() {
 
         override fun onDestroy() {
             main.removeCallbacks(kenBurnsTick)
+            main.removeCallbacks(overlayTick)
             runCatching {
                 this@WallFlowWallpaperService.unregisterReceiver(refreshReceiver)
             }
@@ -109,6 +126,8 @@ class WallFlowWallpaperService : WallpaperService() {
             releasePainter()
             still?.recycle()
             still = null
+            overlayBitmap?.recycle()
+            overlayBitmap = null
             io.shutdownNow()
             super.onDestroy()
         }
@@ -137,6 +156,7 @@ class WallFlowWallpaperService : WallpaperService() {
             note("visible=$visible role=$role")
             if (!visible) {
                 main.removeCallbacks(kenBurnsTick)
+                main.removeCallbacks(overlayTick)
                 player?.pause()
                 return
             }
@@ -151,6 +171,8 @@ class WallFlowWallpaperService : WallpaperService() {
             }
 
             if (playbackAllowed()) player?.play()
+            main.removeCallbacks(overlayTick)
+            main.post(overlayTick)
             if (settings.kenBurns && still != null) {
                 main.removeCallbacks(kenBurnsTick)
                 main.post(kenBurnsTick)
@@ -202,6 +224,8 @@ class WallFlowWallpaperService : WallpaperService() {
             }
             created.setOnFrameAvailable { main.post { drawVideoFrame() } }
             painter = created
+            overlayRenderer = OverlayRenderer(surfaceW)
+            refreshOverlay()
             note("GL surface ready ${surfaceW}x$surfaceH role=$role")
         }
 
@@ -355,6 +379,78 @@ class WallFlowWallpaperService : WallpaperService() {
             val zoom = if (settings.kenBurns) kenBurnsZoom() else 1f
             val offset = if (settings.parallax) xOffset else 0.5f
             painter?.drawBitmap(bitmap, offset, zoom)
+        }
+
+        /** Repaints whatever is on screen, for when only the overlay changed. */
+        private fun redrawCurrent() {
+            if (still != null) drawStill() else painter?.drawVideoFrame(videoW, videoH)
+        }
+
+        // ---- clock overlay --------------------------------------------------
+
+        private fun millisToNextMinute(): Long {
+            val now = System.currentTimeMillis()
+            return 60_000L - (now % 60_000L) + 250L
+        }
+
+        /**
+         * Rebuilds the clock layer. Weather and agenda are read here rather
+         * than cached in the engine so a revoked permission takes effect on
+         * the very next minute.
+         */
+        private fun refreshOverlay() {
+            val renderer = overlayRenderer ?: return
+            val context = this@WallFlowWallpaperService
+
+            if (!settings.showOverlay) {
+                painter?.overlay = null
+                overlayBitmap?.recycle()
+                overlayBitmap = null
+                redrawCurrent()
+                return
+            }
+
+            io.execute {
+                val now = Date()
+                val timePattern = if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm"
+                val minuteOfHour = Calendar.getInstance().get(Calendar.MINUTE)
+
+                val weather = if (settings.showWeather) {
+                    WeatherRepository.get(context).refreshIfStale()
+                        ?.let { "${it.celsius}°   ${it.description}".trim() }
+                } else {
+                    null
+                }
+
+                val events = if (settings.showAgenda) {
+                    val calendar = CalendarRepository.get(context)
+                    calendar.upcoming(3).map { calendar.format(it) }
+                } else {
+                    emptyList()
+                }
+
+                val rendered = runCatching {
+                    renderer.render(
+                        OverlayContent(
+                            time = DateFormat.format(timePattern, now).toString(),
+                            date = DateFormat.format("EEEE d MMMM", now).toString(),
+                            minuteFraction = minuteOfHour / 60f,
+                            weather = weather,
+                            events = events,
+                        )
+                    )
+                }.onFailure { note("overlay render failed: ${it.message}") }.getOrNull()
+                    ?: return@execute
+
+                main.post {
+                    val previous = overlayBitmap
+                    overlayBitmap = rendered
+                    painter?.overlayAnchor = settings.overlayAnchor
+                    painter?.overlay = rendered
+                    redrawCurrent()
+                    previous?.recycle()
+                }
+            }
         }
 
         /** A 0 to 6% drift over half a minute, then back. */

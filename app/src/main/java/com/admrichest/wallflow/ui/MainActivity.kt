@@ -105,6 +105,18 @@ private fun WallFlowRoot() {
         scope.launch { report(withContext(Dispatchers.IO) { repo.addDocuments(uris) }) }
     }
 
+    // The overlay degrades section by section, so these are asked for only
+    // when the user turns the matching switch on.
+    val askOverlayPermissions = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { granted ->
+        val ok = granted.filterValues { it }.keys.size
+        toast(
+            if (ok > 0) "อนุญาตแล้ว $ok รายการ นาฬิกาจะอัปเดตในนาทีถัดไป"
+            else "ยังไม่ได้รับสิทธิ์ ส่วนนั้นจะถูกซ่อนไว้"
+        )
+    }
+
     val pickFolder = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { treeUri: Uri? ->
@@ -152,6 +164,7 @@ private fun WallFlowRoot() {
                 modifier = Modifier.padding(inner),
                 repo = repo,
                 onEnableLive = { launchLiveWallpaperPicker(context) },
+                onRequestPermissions = { askOverlayPermissions.launch(it) },
                 onMessage = { toast(it) },
             )
         }

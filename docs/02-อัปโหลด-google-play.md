@@ -142,15 +142,33 @@ Play รับเฉพาะ **Android App Bundle (.aab)** สำหรับ�
 
 ### 5.6 Data safety ← ข้อสำคัญที่สุด
 
-แอพนี้ไม่มีสิทธิ์ `INTERNET` เลย กรอกง่ายมาก
+ตั้งแต่เวอร์ชัน 1.3.0 แอพมีฟีเจอร์สภาพอากาศซึ่งส่งพิกัดคร่าวๆ ออกไปที่ Open-Meteo คำตอบจึงไม่ใช่ "No" ทั้งหมดอีกต่อไป **ต้องกรอกตามนี้** ไม่งั้นผิดนโยบายและโดนถอดแอพ
 
 | คำถาม | คำตอบ |
 |---|---|
-| Does your app collect or share any of the required user data types? | **No** |
-| Is all of the user data collected by your app encrypted in transit? | ไม่ต้องตอบ (ข้ามอัตโนมัติ) |
-| Do you provide a way for users to request that their data is deleted? | ไม่ต้องตอบ |
+| Does your app collect or share any of the required user data types? | **Yes** |
 
-> ถ้ากรอก **No** ไว้แล้วภายหลังเพิ่มฟีเจอร์ที่ต่อเน็ต ต้องกลับมาแก้ ไม่งั้นผิดนโยบายและโดนถอดแอพ
+จากนั้นติ๊กประเภทข้อมูลเดียวคือ **Location → Approximate location**
+
+| ช่อง | ตอบ |
+|---|---|
+| Collected | **Yes** |
+| Processed ephemerally | **Yes** (ใช้ทันทีแล้วทิ้ง ไม่เก็บพิกัดลงที่ใด) |
+| Shared | **Yes** |
+| Purpose | **App functionality** เท่านั้น |
+| Is this data required or optional? | **Optional** (ผู้ใช้เลือกเปิดเอง) |
+| Is all user data encrypted in transit? | **Yes** (เรียก Open-Meteo ผ่าน HTTPS) |
+| Can users request data deletion? | **No** และอธิบายว่าไม่มีข้อมูลเก็บไว้ให้ลบ |
+
+**ห้ามติ๊ก Calendar** แม้แอพจะขอสิทธิ์ `READ_CALENDAR` เพราะแบบฟอร์ม Data safety ถามเฉพาะข้อมูลที่**ออกจากเครื่อง** ข้อมูลปฏิทินถูกอ่านมาวาดแล้วทิ้งทันที ไม่เคยถูกส่งหรือเก็บ
+
+> ถ้าคุณปิดฟีเจอร์สภาพอากาศถาวรและถอดสิทธิ์ `INTERNET` กับ `ACCESS_COARSE_LOCATION` ออกจาก manifest ค่อยกลับไปตอบ **No** ทั้งหมดได้
+
+### 5.6.1 คำประกาศสิทธิ์อ่อนไหว
+
+`READ_CALENDAR` เป็น dangerous permission ตอนส่งรีวิว Play อาจขอให้อธิบายการใช้งาน ใส่ข้อความประมาณนี้
+
+> The app draws the user's next calendar events onto the wallpaper as an optional clock overlay. Events are read on device, rendered, and discarded. They are never stored or transmitted. The feature is off unless the user enables it.
 
 ### 5.7 Government apps
 **No**

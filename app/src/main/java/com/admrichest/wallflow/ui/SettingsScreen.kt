@@ -1,7 +1,9 @@
 package com.admrichest.wallflow.ui
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -32,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.admrichest.wallflow.data.LibraryRepository
 import com.admrichest.wallflow.data.Quality
@@ -50,6 +53,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     repo: LibraryRepository,
     onEnableLive: () -> Unit,
+    onRequestPermissions: (Array<String>) -> Unit,
     onMessage: (String) -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -180,6 +184,92 @@ fun SettingsScreen(
                 SwitchRow(title = "สุ่มลำดับ", subtitle = null, checked = shuffle) {
                     shuffle = it
                     settings.shuffle = it
+                }
+            }
+        }
+
+        item {
+            SettingsCard("นาฬิกาบนวอลเปเปอร์") {
+                var overlay by remember { mutableStateOf(settings.showOverlay) }
+                var weather by remember { mutableStateOf(settings.showWeather) }
+                var agenda by remember { mutableStateOf(settings.showAgenda) }
+                var anchor by remember { mutableStateOf(settings.overlayAnchor) }
+                var permTick by remember { mutableIntStateOf(0) }
+
+                val hasLocation = remember(permTick) {
+                    ContextCompat.checkSelfPermission(
+                        context, Manifest.permission.ACCESS_COARSE_LOCATION
+                    ) == PackageManager.PERMISSION_GRANTED
+                }
+                val hasCalendar = remember(permTick) {
+                    ContextCompat.checkSelfPermission(
+                        context, Manifest.permission.READ_CALENDAR
+                    ) == PackageManager.PERMISSION_GRANTED
+                }
+
+                SwitchRow(
+                    title = "แสดงนาฬิกาวงกลมบนวอลเปเปอร์",
+                    subtitle = "วาดทับรูปโดยตรง จึงขึ้นทั้งหน้าจอหลักและจอล็อก " +
+                        "และไม่กินแบตเพิ่มเพราะหยุดพร้อม engine ตอนปิดจอ",
+                    checked = overlay,
+                ) {
+                    overlay = it
+                    settings.showOverlay = it
+                }
+
+                if (overlay) {
+                    SwitchRow(
+                        title = "สภาพอากาศ" + if (hasLocation) "" else " (ยังไม่ได้สิทธิ์ตำแหน่ง)",
+                        subtitle = "ดึงจาก Open-Meteo ทุก 30 นาที ใช้ตำแหน่งคร่าวๆ ที่ปัดทศนิยมแล้ว",
+                        checked = weather && hasLocation,
+                    ) {
+                        weather = it
+                        settings.showWeather = it
+                        if (it && !hasLocation) {
+                            onRequestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION))
+                        }
+                    }
+
+                    SwitchRow(
+                        title = "ตารางกิจกรรม" + if (hasCalendar) "" else " (ยังไม่ได้สิทธิ์ปฏิทิน)",
+                        subtitle = "แสดงนัดถัดไปสูงสุด 3 รายการ อ่านอย่างเดียว ไม่เก็บลงเครื่อง",
+                        checked = agenda && hasCalendar,
+                    ) {
+                        agenda = it
+                        settings.showAgenda = it
+                        if (it && !hasCalendar) {
+                            onRequestPermissions(arrayOf(Manifest.permission.READ_CALENDAR))
+                        }
+                    }
+
+                    Text("ตำแหน่งแนวตั้ง", style = MaterialTheme.typography.bodyMedium)
+                    Slider(
+                        value = anchor,
+                        onValueChange = { anchor = it },
+                        onValueChangeFinished = { settings.overlayAnchor = anchor },
+                        valueRange = 0.15f..0.85f,
+                    )
+
+                    if (!hasLocation || !hasCalendar) {
+                        Button(
+                            onClick = {
+                                val wanted = buildList {
+                                    if (!hasLocation) add(Manifest.permission.ACCESS_COARSE_LOCATION)
+                                    if (!hasCalendar) add(Manifest.permission.READ_CALENDAR)
+                                }
+                                onRequestPermissions(wanted.toTypedArray())
+                                permTick++
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("ขอสิทธิ์ที่ยังขาด") }
+                    }
+
+                    Text(
+                        "นาฬิกานี้วาดโดยแอพเรา จึงอาจซ้อนกับนาฬิกาของ One UI บนจอล็อก " +
+                            "ถ้าซ้อนกัน เลื่อนตำแหน่งแนวตั้งหนีได้ หรือไปปิดนาฬิกาของระบบที่ " +
+                            "ตั้งค่า → หน้าจอล็อก → สไตล์นาฬิกา",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
                 }
             }
         }

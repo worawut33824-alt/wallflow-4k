@@ -175,6 +175,23 @@ class GlPainter(surface: Surface, private val width: Int, private val height: In
     }
 
     /**
+     * The clock, date, weather and agenda layer, already composed into a
+     * transparent bitmap. Kept separate from the wallpaper content so it can
+     * be redrawn once a minute without touching the photo or the video.
+     */
+    var overlay: Bitmap? = null
+        set(value) {
+            field = value
+            overlayDirty = true
+        }
+
+    /** Where the overlay sits vertically, 0 at the top and 1 at the bottom. */
+    var overlayAnchor: Float = 0.42f
+
+    private var overlayTexture = 0
+    private var overlayDirty = false
+
+    /**
      * Uploads and draws a still, cover-cropped to the surface.
      *
      * [offsetX] 0..1 slides the visible window across the overflow for
@@ -191,7 +208,8 @@ class GlPainter(surface: Surface, private val width: Int, private val height: In
         Matrix.translateM(textureMatrix, 0, 0f, 1f, 0f)
         Matrix.scaleM(textureMatrix, 0, 1f, -1f, 1f)
 
-        drawQuad(
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+        drawCover(
             program = flatProgram,
             target = GLES20.GL_TEXTURE_2D,
             texture = flatTexture,
@@ -200,6 +218,8 @@ class GlPainter(surface: Surface, private val width: Int, private val height: In
             offsetX = offsetX,
             zoom = zoom,
         )
+        drawOverlayLayer()
+        EGL14.eglSwapBuffers(display, eglSurface)
     }
 
     /**
@@ -214,7 +234,8 @@ class GlPainter(surface: Surface, private val width: Int, private val height: In
             .onFailure { Log.w(TAG, "updateTexImage failed", it); return false }
         texture.getTransformMatrix(textureMatrix)
 
-        drawQuad(
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+        drawCover(
             program = oesProgram,
             target = GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
             texture = oesTexture,
@@ -223,10 +244,47 @@ class GlPainter(surface: Surface, private val width: Int, private val height: In
             offsetX = 0.5f,
             zoom = 1f,
         )
+        drawOverlayLayer()
+        EGL14.eglSwapBuffers(display, eglSurface)
         return true
     }
 
-    private fun drawQuad(
+    /** Composites the clock layer on top of whatever was just drawn. */
+    private fun drawOverlayLayer() {
+        val layer = overlay ?: return
+        if (layer.isRecycled) return
+
+        if (overlayTexture == 0) overlayTexture = createTexture(GLES20.GL_TEXTURE_2D)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, overlayTexture)
+        if (overlayDirty) {
+            GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, layer, 0)
+            overlayDirty = false
+        }
+
+        Matrix.setIdentityM(textureMatrix, 0)
+        Matrix.translateM(textureMatrix, 0, 0f, 1f, 0f)
+        Matrix.scaleM(textureMatrix, 0, 1f, -1f, 1f)
+
+        // Pixel for pixel, centred horizontally and anchored vertically.
+        val halfW = layer.width.toFloat() / width
+        val halfH = layer.height.toFloat() / height
+        val centreY = 1f - 2f * overlayAnchor.coerceIn(0f, 1f)
+
+        GLES20.glEnable(GLES20.GL_BLEND)
+        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+        drawRect(
+            program = flatProgram,
+            target = GLES20.GL_TEXTURE_2D,
+            texture = overlayTexture,
+            left = -halfW,
+            right = halfW,
+            bottom = centreY - halfH,
+            top = centreY + halfH,
+        )
+        GLES20.glDisable(GLES20.GL_BLEND)
+    }
+
+    private fun drawCover(
         program: Int,
         target: Int,
         texture: Int,
@@ -245,18 +303,38 @@ class GlPainter(surface: Surface, private val width: Int, private val height: In
         val slack = (halfW - 1f).coerceAtLeast(0f)
         val shift = slack * (1f - 2f * offsetX.coerceIn(0f, 1f))
 
+        drawRect(
+            program = program,
+            target = target,
+            texture = texture,
+            left = -halfW + shift,
+            right = halfW + shift,
+            bottom = -halfH,
+            top = halfH,
+        )
+    }
+
+    /** Draws one textured rectangle in clip space. Does not clear or swap. */
+    private fun drawRect(
+        program: Int,
+        target: Int,
+        texture: Int,
+        left: Float,
+        right: Float,
+        bottom: Float,
+        top: Float,
+    ) {
         vertexBuffer.clear()
         vertexBuffer.put(
             floatArrayOf(
-                -halfW + shift, -halfH,
-                halfW + shift, -halfH,
-                -halfW + shift, halfH,
-                halfW + shift, halfH,
+                left, bottom,
+                right, bottom,
+                left, top,
+                right, top,
             )
         )
         vertexBuffer.position(0)
 
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
         GLES20.glUseProgram(program)
 
         val aPos = GLES20.glGetAttribLocation(program, "aPos")
@@ -278,8 +356,6 @@ class GlPainter(surface: Surface, private val width: Int, private val height: In
 
         GLES20.glDisableVertexAttribArray(aPos)
         GLES20.glDisableVertexAttribArray(aTex)
-
-        EGL14.eglSwapBuffers(display, eglSurface)
     }
 
     fun setOnFrameAvailable(listener: SurfaceTexture.OnFrameAvailableListener?) {
@@ -294,6 +370,8 @@ class GlPainter(surface: Surface, private val width: Int, private val height: In
     // ---- teardown ----------------------------------------------------------
 
     fun release() {
+        overlayTexture = 0
+        overlay = null
         runCatching { surfaceTexture?.setOnFrameAvailableListener(null) }
         runCatching { videoSurface?.release() }
         runCatching { surfaceTexture?.release() }

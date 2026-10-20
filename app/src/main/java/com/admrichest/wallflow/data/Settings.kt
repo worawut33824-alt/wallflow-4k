@@ -88,6 +88,28 @@ class Settings private constructor(context: Context) {
         get() = prefs.getBoolean(KEY_ADAPTIVE_COLORS, true)
         set(v) = prefs.edit().putBoolean(KEY_ADAPTIVE_COLORS, v).apply()
 
+    // ---- clock overlay -----------------------------------------------------
+
+    /** Draw the circular clock layer on top of the wallpaper. */
+    var showOverlay: Boolean
+        get() = prefs.getBoolean(KEY_OVERLAY, true)
+        set(v) = prefs.edit().putBoolean(KEY_OVERLAY, v).apply()
+
+    /** Needs ACCESS_COARSE_LOCATION and INTERNET; silently off without them. */
+    var showWeather: Boolean
+        get() = prefs.getBoolean(KEY_OVERLAY_WEATHER, true)
+        set(v) = prefs.edit().putBoolean(KEY_OVERLAY_WEATHER, v).apply()
+
+    /** Needs READ_CALENDAR; silently off without it. */
+    var showAgenda: Boolean
+        get() = prefs.getBoolean(KEY_OVERLAY_AGENDA, true)
+        set(v) = prefs.edit().putBoolean(KEY_OVERLAY_AGENDA, v).apply()
+
+    /** Vertical placement of the overlay, 0 at the top and 1 at the bottom. */
+    var overlayAnchor: Float
+        get() = prefs.getFloat(KEY_OVERLAY_ANCHOR, 0.42f)
+        set(v) = prefs.edit().putFloat(KEY_OVERLAY_ANCHOR, v.coerceIn(0.15f, 0.85f)).apply()
+
     // ---- queue position ----------------------------------------------------
 
     var homeIndex: Int
@@ -151,6 +173,10 @@ class Settings private constructor(context: Context) {
         private const val KEY_LAST_CHANGE = "last_change_at"
         private const val KEY_ENGINE_LOG = "engine_log"
         private const val KEY_SETTINGS_VERSION = "settings_version"
+        private const val KEY_OVERLAY = "overlay_enabled"
+        private const val KEY_OVERLAY_WEATHER = "overlay_weather"
+        private const val KEY_OVERLAY_AGENDA = "overlay_agenda"
+        private const val KEY_OVERLAY_ANCHOR = "overlay_anchor"
 
         @Volatile
         private var instance: Settings? = null

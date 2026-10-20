@@ -7,9 +7,15 @@
     <!-- Re-arm the rotation alarm after a reboot. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Clock overlay extras. Each is optional and the overlay simply omits
+         the section when the permission is missing. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+
     <!--
       Deliberately NOT requested:
-        INTERNET            - the app is fully offline, nothing leaves the device
+        ACCESS_FINE_LOCATION - coarse is enough for a temperature reading
         READ_MEDIA_IMAGES   - media is reached through persistable SAF grants instead
         READ_MEDIA_VIDEO      so no broad gallery access is ever needed
         FOREGROUND_SERVICE  - rotation runs on AlarmManager + the wallpaper engine
