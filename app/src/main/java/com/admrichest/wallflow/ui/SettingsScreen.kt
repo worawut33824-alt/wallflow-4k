@@ -243,6 +243,12 @@ fun SettingsScreen(
                     }
 
                     Text("ตำแหน่งแนวตั้ง", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "แอพกันพื้นที่ด้านล่างไว้ให้จุดสแกนลายนิ้วมือโดยอัตโนมัติ " +
+                            "เลื่อนลงสุดก็จะไม่ไปซ้อนไอคอนสแกน และการสแกนไม่เคยถูกบัง " +
+                            "เพราะ overlay เป็นวอลเปเปอร์ที่อยู่ใต้ UI ของจอล็อก",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
                     Slider(
                         value = anchor,
                         onValueChange = { anchor = it },

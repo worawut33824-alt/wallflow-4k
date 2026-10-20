@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.os.BatteryManager
 import android.os.Build
@@ -388,6 +389,36 @@ class WallFlowWallpaperService : WallpaperService() {
 
         // ---- clock overlay --------------------------------------------------
 
+        /**
+         * Keeps the overlay out of the fingerprint reader's area.
+         *
+         * The overlay cannot break the scanner: it is wallpaper, drawn below
+         * the keyguard, and lock-screen touches never reach this engine. What
+         * it can do is sit behind the fingerprint icon and make it hard to
+         * read, so the bottom of the screen is reserved and the user's chosen
+         * position is clamped to what is left.
+         */
+        private fun safeAnchor(layerHeight: Int): Float {
+            val height = surfaceH.toFloat()
+            if (height <= 0f) return settings.overlayAnchor
+
+            val reserved = if (
+                packageManager.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT)
+            ) {
+                FINGERPRINT_SAFE_FRACTION
+            } else {
+                GESTURE_BAR_SAFE_FRACTION
+            }
+
+            val half = layerHeight / 2f / height
+            val lowest = 1f - reserved - half
+            val highest = STATUS_SAFE_FRACTION + half
+
+            // A layer taller than the usable band simply centres.
+            if (highest > lowest) return 0.5f
+            return settings.overlayAnchor.coerceIn(highest, lowest)
+        }
+
         private fun millisToNextMinute(): Long {
             val now = System.currentTimeMillis()
             return 60_000L - (now % 60_000L) + 250L
@@ -445,7 +476,7 @@ class WallFlowWallpaperService : WallpaperService() {
                 main.post {
                     val previous = overlayBitmap
                     overlayBitmap = rendered
-                    painter?.overlayAnchor = settings.overlayAnchor
+                    painter?.overlayAnchor = safeAnchor(rendered.height)
                     painter?.overlay = rendered
                     redrawCurrent()
                     previous?.recycle()
@@ -553,5 +584,11 @@ class WallFlowWallpaperService : WallpaperService() {
         const val DOUBLE_TAP_MS = 320L
         const val KEN_BURNS_FRAME_MS = 80L
         const val KEN_BURNS_CYCLE_MS = 60_000L
+
+        // Bottom band kept clear for the under-display fingerprint target on
+        // a tall phone, measured as a fraction of screen height.
+        const val FINGERPRINT_SAFE_FRACTION = 0.26f
+        const val GESTURE_BAR_SAFE_FRACTION = 0.10f
+        const val STATUS_SAFE_FRACTION = 0.07f
     }
 }
