@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">WallFlow 4K</string>
+    <string name="live_wallpaper_label">WallFlow 4K</string>
+    <string name="live_wallpaper_desc">วอลเปเปอร์ภาพและวิดีโอแบบไม่จำกัด พร้อมนาฬิกาปรับสีตามภาพ</string>
+
+    <string name="tab_library">คลังภาพ</string>
+    <string name="tab_settings">ตั้งค่า</string>
+
+    <string name="add_files">เพิ่มไฟล์</string>
+    <string name="link_folder">เชื่อมโฟลเดอร์</string>
+    <string name="apply_now">ตั้งเป็นวอลเปเปอร์เลย</string>
+    <string name="enable_live">เปิดใช้ Live Wallpaper</string>
+    <string name="next_wallpaper">เปลี่ยนรูปถัดไป</string>
+    <string name="empty_library">คลังยังว่างอยู่\nเพิ่มรูปหรือวิดีโอเพื่อเริ่มใช้งาน</string>
+</resources>
